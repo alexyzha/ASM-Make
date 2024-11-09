@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 ##  Update packages, get NASM
 RUN apt-get update && \
-    apt-get install -y nasm build-essential gdb valgrind && \
+    apt-get install -y nasm build-essential gdb valgrind openssl libssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
 ##  Set working dir
