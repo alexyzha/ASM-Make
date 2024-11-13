@@ -1,1 +1,1 @@
-# write ds/algo in asm to learn
+# i write whatever i want in asm :D
