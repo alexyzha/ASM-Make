@@ -68,6 +68,10 @@ _start:
     mov [rsp], rcx
     fild qword [rsp]
     fdivp
+    mov rcx, 100
+    mov [rsp], rcx
+    fild qword [rsp]
+    fmulp
     fstp qword [rsp]
     movsd xmm0, qword [rsp]
     add rsp, 8

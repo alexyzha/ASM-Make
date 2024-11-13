@@ -1,17 +1,17 @@
 section .data
     INT_PERC    db      '%d', 0xA, 0
+    NODE_SIZE   equ     32
 
-    ; struct node {
+;   struct node {
         parent      equ     0
         left        equ     8
         right       equ     16
         val         equ     24
         color       equ     28
-        NSIZE       equ     32
-    ; };
+;   };
 
 section .bss
-    node        resb        NSIZE
+    node        resb        NODE_SIZE
 
 
 section .text
