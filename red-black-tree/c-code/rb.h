@@ -18,6 +18,10 @@ void rb_remove(node* root, int rval);
 
 void rb_balance(node* cur);
 
+void rb_lrotate(node* cur);
+
+void rb_rrotate(node* cur);
+
 /*---------------*
  |  For testing  |
  *---------------*/
