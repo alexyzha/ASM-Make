@@ -24,6 +24,12 @@ void fix_height(node* x);
 
 node* avl_insert(int i, node* tree);
 
+node* avl_delete(int i, node* tree);
+
+void clear(node* tree);
+
 void print(node* tree);
 
 int validate(node* tree);
+
+int check_heights(node* tree);
