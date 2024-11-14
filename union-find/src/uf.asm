@@ -22,7 +22,20 @@ _start:
     call uf_init
     mov [u], qword rax
 
-    
+    mov rdi, qword [u]
+    mov rsi, 3
+    mov rdx, 4
+    call join
+
+
+    mov rdi, qword [u]
+    mov rsi, 3
+    mov rdx, 4
+    call con
+
+    mov rdi, INT_PERC
+    mov rsi, rax
+    call printf
 
     mov rdi, qword [u]              ; free
     call delete
@@ -102,11 +115,11 @@ join:
     mov r9d, dword [r9]
     lea r10, [r8+(rdx*4)]
     mov r10d, dword [r10]           ; r9 = h[px], r10 = h[py]
-    cmp r9, r10
+    cmp r9d, r10d
     jl join_right
     xor rax, rax
-    test ecx, edx
-    setz al                         ; if ecx = edx, ++height
+    cmp r9d, r10d
+    sete al                         ; if ecx = edx, ++height
     add r9d, eax
     lea r10, [r8+(rcx*4)]
     mov dword [r10], r9d
