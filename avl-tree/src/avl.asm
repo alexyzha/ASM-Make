@@ -175,6 +175,7 @@ avl_insert:
     insert_no_create:
 
         ; what the sigma
+        ; do this later
 
     insert_return:
     pop rsi
