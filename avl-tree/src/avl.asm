@@ -162,3 +162,21 @@ fix_height:
         cmp rcx, rax
         cmovl rax, rcx                 ; mov rcx to rax if rcx > rax
         ret
+
+avl_insert:
+    ; rdi = cur node
+    ; rsi = i
+    push rdi
+    push rsi
+    test rdi, rdi
+    jnz insert_no_create
+    xchg rdi, rsi
+    call new_node                   ; rax = p->new node 
+    insert_no_create:
+
+        ; what the sigma
+
+    insert_return:
+    pop rsi
+    pop rdi
+    ret
