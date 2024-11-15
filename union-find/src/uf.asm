@@ -21,22 +21,21 @@ _start:
     mov rdi, 10                     ; malloc
     call uf_init
     mov [u], qword rax
-
-    mov rdi, qword [u]
+    mov rdi, qword [u]              ; test join
     mov rsi, 3
     mov rdx, 4
     call join
-
-
-    mov rdi, qword [u]
-    mov rsi, 3
+    mov rdi, qword [u]              ; test join 2 long
+    mov rsi, 9
     mov rdx, 4
+    call join
+    mov rdi, qword [u]              ; print res
+    mov rsi, 3
+    mov rdx, 9
     call con
-
     mov rdi, INT_PERC
     mov rsi, rax
     call printf
-
     mov rdi, qword [u]              ; free
     call delete
     mov [u], qword rax
@@ -126,10 +125,11 @@ join:
     mov r8, [rdi+p]                 ; fix par
     lea r9, [r8+(rdx*4)]
     mov dword [r9], ecx
+    jmp join_return
     join_right:
-    mov r8, [rdi+p]
-    lea r9, [r8+(rcx*4)]
-    mov dword [r9], edx
+        mov r8, [rdi+p]
+        lea r9, [r8+(rcx*4)]
+        mov dword [r9], edx
     join_return:
         ret
 
