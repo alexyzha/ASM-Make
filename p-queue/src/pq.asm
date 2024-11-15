@@ -2,16 +2,16 @@ section .data
     INT_PERC    db      '%d', 0xA, 0
     INT_PNNL    db      '%d', 0x20, 0
     NEWLINE     db      0xA, 0
-    VEC_SIZE    equ     16
+    PQ_SIZE     equ     16
 
-; struct vec {
+; struct pq {
     v           equ     0
     back        equ     8
     sz          equ     12
 ; };
 
 section .bss
-    vec         resq    1
+    pq          resq    1
 
 section .text
     global _start
@@ -20,35 +20,35 @@ section .text
     extern free
 
 _start:
-    call vec_init
-    mov qword [vec], rax
+    call pq_init
+    mov qword [pq], rax
     mov rbx, 0
     push_loop:                      ; test push
-        mov rdi, qword [vec]
+        mov rdi, qword [pq]
         mov rsi, rbx
         call push_back
-        call vec_print
+        call pq_print
         inc rbx
         cmp rbx, 10
         jne push_loop
     mov rbx, 10
     pop_loop:                       ; test pop
-        mov rdi, qword [vec]
+        mov rdi, qword [pq]
         call pop_back
-        call vec_print
+        call pq_print
         dec rbx
         test rbx, rbx
         jnz pop_loop
-    mov rdi, qword [vec]            ; delete
-    call vec_delete
-    mov qword [vec], 0
+    mov rdi, qword [pq]            ; delete
+    call pq_delete
+    mov qword [pq], 0
     mov rax, 60                     ; return 0
     xor rdi, rdi
     syscall
 
-vec_init:
-    ; return p->vec in rax
-    mov rdi, VEC_SIZE
+pq_init:
+    ; return p->pq in rax
+    mov rdi, pq_SIZE
     call malloc
     push rax
     mov rdi, 4
@@ -60,8 +60,8 @@ vec_init:
     mov dword [rax+sz], 1
     ret
 
-vec_delete:
-    ; rdi = vec*
+pq_delete:
+    ; rdi = pq*
     push rdi
     mov rdi, qword [rdi+v]
     call free
@@ -70,7 +70,7 @@ vec_delete:
     ret
 
 push_back:
-    ; rdi = vec*, rsi = val
+    ; rdi = pq*, rsi = val
     mov eax, dword [rdi+back]
     cmp eax, dword [rdi+sz]
     jne pb_no_rsz                   ; rsz = sz*2 @ full
@@ -81,7 +81,7 @@ push_back:
     call malloc
     pop rsi
     pop rdi
-    xchg qword [rdi+v], rax         ; swap rax, vec->v ; rax = old
+    xchg qword [rdi+v], rax         ; swap rax, pq->v ; rax = old
     push rax
     mov rcx, qword [rdi+v]          ; rcx = p->new arr
     mov edx, dword [rdi+sz]
@@ -113,7 +113,7 @@ push_back:
     ret
 
 pop_back:
-    ; rdi = vec*
+    ; rdi = pq*
     mov ecx, dword [rdi+back]
     test ecx, ecx
     jz pb_nothing
@@ -122,8 +122,8 @@ pop_back:
     pb_nothing:
         ret
 
-vec_print:
-    ; rdi = vec*
+pq_print:
+    ; rdi = pq*
     push rbx
     push r12
     push rdi
