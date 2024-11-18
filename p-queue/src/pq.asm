@@ -22,24 +22,24 @@ section .text
 _start:
     call pq_init
     mov qword [pq], rax
-    mov rbx, 0
+    mov rbx, 10
     push_loop:                      ; test push
         mov rdi, qword [pq]
         mov rsi, rbx
-        call push_back
+        call pq_push
         call pq_print
-        inc rbx
-        cmp rbx, 10
-        jne push_loop
+        dec rbx
+        test rbx, rbx
+        jnz push_loop
     mov rbx, 10
     pop_loop:                       ; test pop
         mov rdi, qword [pq]
-        call pop_back
+        call pq_pop
         call pq_print
         dec rbx
         test rbx, rbx
         jnz pop_loop
-    mov rdi, qword [pq]            ; delete
+    mov rdi, qword [pq]             ; delete
     call pq_delete
     mov qword [pq], 0
     mov rax, 60                     ; return 0
@@ -48,7 +48,7 @@ _start:
 
 pq_init:
     ; return p->pq in rax
-    mov rdi, pq_SIZE
+    mov rdi, PQ_SIZE
     call malloc
     push rax
     mov rdi, 4
@@ -69,7 +69,7 @@ pq_delete:
     call free
     ret
 
-push_back:
+pq_push:
     ; rdi = pq*, rsi = val
     mov eax, dword [rdi+back]
     cmp eax, dword [rdi+sz]
@@ -110,15 +110,73 @@ push_back:
         mov dword [rcx], esi
         inc edx
         mov dword [rdi+back], edx
+    dec edx                         ; edx-1 = real back index -> swim up
+    test edx, edx
+    jz push_finish                  ; if only 1 node then fin
+    swim_up_loop:
+        mov ecx, edx
+        dec ecx
+        shr ecx, 1                  ; ecx = par
+        mov rax, qword [rdi+v]      ; p->v
+        lea r8, [rax+(rcx*4)]
+        mov r8d, dword [r8]         ; r8d = parent val
+        lea r9, [rax+(rdx*4)]
+        cmp dword [r9], r8d
+        jg push_finish
+        mov r10d, dword [r9]
+        mov dword [r9], r8d
+        lea r8, [rax+(rcx*4)]
+        mov dword [r8], r10d
+        mov edx, ecx                ; move to par
+        test edx, edx
+        jnz swim_up_loop
+    push_finish:
     ret
 
-pop_back:
+pq_pop:
     ; rdi = pq*
     mov ecx, dword [rdi+back]
     test ecx, ecx
-    jz pb_nothing
+    jz pb_nothing                   ; ret if empty
     dec ecx
     mov dword [rdi+back], ecx
+    test ecx, ecx
+    jz pb_nothing                   ; ret if made empty
+    mov rax, [rdi+v]                ; pop & swim down
+    lea r8, [rax]
+    mov edx, dword [r8]
+    lea r9, [rax+(rcx*4)]           ; swap v[0] and v.back()
+    xchg edx, dword [r9]
+    mov dword [r8], edx
+    xor rcx, rcx                    ; [0,rdi+back)
+    swim_down_loop:
+        mov r8d, ecx
+        shl r8d, 1
+        inc r8d                     ; lchild
+        cmp r8d, dword [rdi+back]
+        jge pb_nothing              ; no lchild = no rchild
+        mov r9d, r8d
+        inc r9d
+        cmp r9d, dword [rdi+back]
+        jge left_only
+        lea r9, [rax+(r9*4)]        ; compare l/rchild
+        mov r9d, dword [r9]
+        cmp r9d, dword [rax+(r8*4)]
+        jge left_only               ; jump if rchild >= lchild
+        inc r8d
+        left_only:                  ; r8d holds smaller of 2 children
+            mov r10d, r8d
+            lea r9, [rax+(r8*4)]    ; compare smaller child & par
+            mov r9d, dword [r9]     ; r9 = smaller child, dword [rax+(rcx*4)] = parent
+            cmp r9d, dword [rax+(rcx*4)]
+            jge pb_nothing      
+            lea r9, [rax+(rcx*4)]
+            mov edx, dword [r9]
+            lea r8, [rax+(r8*4)]
+            xchg edx, dword [r8]
+            mov dword [r9], edx
+            mov ecx, r10d
+        jmp swim_down_loop
     pb_nothing:
         ret
 
