@@ -68,8 +68,10 @@ node* avl_insert(int i, node* tree) {
     if(abs(b) > 1) {
         node* next = (b < 0 ? tree->left : tree->right);
         int nb = balance(next);
-        if(nb && ((nb&0x80000000)^(b&0x80000000)))                      //  mismatch imbalance sign & nb != 0
+        if(nb && ((nb&0x80000000)^(b&0x80000000))) {                    //  mismatch imbalance sign & nb != 0
             next = (nb < 0 ? rrotate(next) : lrotate(next));
+            b < 0 ? (tree->left = next) : (tree->right = next);
+        }
         tree = (b < 0 ? rrotate(tree) : lrotate(tree));                 //  rotate cur
     }
     return tree;
@@ -99,8 +101,10 @@ node* avl_delete(int i, node* tree) {
     if(abs(b) > 1) {
         node* next = (b < 0 ? tree->left : tree->right);
         int nb = balance(next);
-        if(nb && ((nb&0x80000000)^(b&0x80000000)))                      //  mismatch imbalance sign & nb != 0
+        if(nb && ((nb&0x80000000)^(b&0x80000000))) {                    //  mismatch imbalance sign & nb != 0
             next = (nb < 0 ? rrotate(next) : lrotate(next));
+            b < 0 ? (tree->left = next) : (tree->right = next);
+        }
         tree = (b < 0 ? rrotate(tree) : lrotate(tree));                 //  rotate cur
     }
     return tree;
