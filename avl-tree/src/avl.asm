@@ -31,26 +31,36 @@ _start:
     mov qword [ROOT], 0         ; nullptr
     mov rbx, 100000
     call print_line
-    insert_test_loop:           ; 15 random ins
-        call rand
-        xor rdx, rdx
-        mov rcx, 0x7fffffff
-        div rcx
-        push rdx
-        mov rdi, INT_PERC
-        mov esi, edx
+    insert_test_loop:           ; in
+        ; call rand
+        ; xor rdx, rdx
+        ; mov rcx, 0x7fffffff
+        ; div rcx
+        ; push rdx
+        ; mov rdi, INT_PERC
+        ; mov esi, edx
         ; call printf
-        pop rdx
-        mov esi, edx
+        ; pop rdx
+        mov esi, ebx
         mov rdi, qword [ROOT]
         call avl_insert
         mov qword [ROOT], rax
-        mov rdi, qword [ROOT]
+        ; mov rdi, qword [ROOT]
         ; call print_bfs
         ; call print_line
         dec rbx
         test rbx, rbx
         jnz insert_test_loop
+    mov rbx, 100000
+    call print_line
+    delete_test_loop:           ; delete
+        mov esi, ebx
+        mov rdi, qword [ROOT]
+        call avl_delete
+        mov qword [ROOT], rax
+        dec rbx
+        test rbx, rbx
+        jnz delete_test_loop
     mov rdi, qword [ROOT]
     call delete_tree
     mov rax, 60                 ; return 0
@@ -308,26 +318,105 @@ avl_insert:
             call avl_insert
             pop rdi
             mov qword [rdi+left], rax
-        avl_insert_balance:
-            call fix_height
-            call get_balance
-            mov ecx, eax
-            xor rdx, rdx
-            cdq
-            xor eax, edx
-            sub eax, edx
-            cmp eax, 1
-            jle avl_insert_return       ; no primary rotation
-            avl_insert_pri:
-            cmp ecx, 0                  ; bal < 0 = r else l
-            jg avl_insert_pri_g
-            call right_rotate
-            jmp avl_insert_done
-            avl_insert_pri_g:
-                call left_rotate
-            avl_insert_done:            ; rax = new cur
-                mov rdi, rax
+    avl_insert_balance:
+        call fix_height
+        call get_balance
+        mov ecx, eax
+        xor rdx, rdx
+        cdq
+        xor eax, edx
+        sub eax, edx
+        cmp eax, 1
+        jle avl_insert_return       ; no primary rotation
+        avl_insert_pri:
+        cmp ecx, 0                  ; bal < 0 = r else l
+        jg avl_insert_pri_g
+        call right_rotate
+        jmp avl_insert_done
+        avl_insert_pri_g:
+            call left_rotate
+        avl_insert_done:            ; rax = new cur
+            mov rdi, rax
     avl_insert_return:
+        mov rax, rdi
+        pop rsi
+        ret
+
+avl_delete:
+    ; rdi = cur
+    ; rsi = val
+    push rsi
+    test rdi, rdi
+    jz avl_delete_return
+    cmp dword [rdi+val], esi            ; compare & go
+    jne avl_delete_path
+    mov rax, qword [rdi+left]           ; r&l = 2c
+    test rax, rax
+    jz avl_delete_less_cld              ; if(!l) 
+    or rax, qword [rdi+right]
+    cmp rax, qword [rdi+left]           ; r|l == l, r = nptr
+    je avl_delete_less_cld
+        mov rax, qword [rdi+right]
+        successor_loop:
+            mov rcx, qword [rax+left]
+            test rcx, rcx
+            cmovnz rax, rcx
+            jnz successor_loop
+        mov ecx, dword [rdi+val]
+        xchg ecx, dword [rax+val]
+        xchg ecx, dword [rdi+val]       ; after swap
+        push rdi
+        mov rdi, qword [rdi+right]
+        call avl_delete
+        pop rdi
+        mov qword [rdi+right], rax      ; cur->r = delete(cur->r)
+        jmp avl_delete_path
+    avl_delete_less_cld:
+        mov rax, qword [rdi+left]
+        test rax, rax
+        jnz avl_delete_less_cld_free
+        mov rax, qword [rdi+right]
+        avl_delete_less_cld_free:
+            push rax                    ; rdi = node still
+            call free
+            pop rax
+            mov rdi, rax
+            jmp avl_delete_return
+    avl_delete_path:
+        cmp dword [rdi+val], esi
+        jg avl_delete_g
+        push rdi
+        mov rdi, qword [rdi+right]
+        call avl_delete
+        pop rdi
+        mov qword [rdi+right], rax
+        jmp avl_delete_balance
+        avl_delete_g:
+            push rdi
+            mov rdi, qword [rdi+left]
+            call avl_delete
+            pop rdi
+            mov qword [rdi+left], rax
+    avl_delete_balance:
+        call fix_height
+        call get_balance
+        mov ecx, eax
+        xor rdx, rdx
+        cdq
+        xor eax, edx
+        sub eax, edx
+        cmp eax, 1
+        jle avl_delete_return       ; no primary rotation
+        avl_delete_pri:
+        cmp ecx, 0                  ; bal < 0 = r else l
+        jg avl_delete_pri_g
+        call right_rotate
+        jmp avl_delete_done
+        avl_delete_pri_g:
+            call left_rotate
+        avl_delete_done:            ; rax = new cur
+            mov rdi, rax
+    avl_delete_return:
         mov rax, rdi
         pop rsi
         ret
