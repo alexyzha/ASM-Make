@@ -5,5 +5,8 @@
 - `DONE` p-queue
 - `DONE` union-find
 - `DONE` vector
-- `IN PROGRESS` rb-tree
+- `DONE` avl-tree
 - `IN PROGRESS` seg-tree
+- `IN PROGRESS` rb-tree
+- `MAYBE` bitwise-seg?
+- `MAYBE` suffix-array
