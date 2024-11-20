@@ -68,9 +68,16 @@ _start:
         cmp rbx, 17
         jne LOOP2
     mov rdi, board
-    xor rsi, rsi
+    mov rsi, 1
+    movsd xmm3, xmm0
     call v_ofstate                      ; HOLY SHIT VSTATE WORKS 1ST TRY LESGO
+    mov rdi, FLT_PERC                   ; withupdate works
+    call printf
 
+    mov rdi, board                      ; noupdate works too
+    mov rsi, 0
+    movsd xmm0, xmm3
+    call v_ofstate
     mov rdi, FLT_PERC
     call printf
 
@@ -218,19 +225,10 @@ delete_config:
     ret
 
 v_ofstate:
-    ; rdi = board, rsi = delta (*1000->int)
+    ; rdi = board, rsi = delta? 1/0
     ; xmm0 = avg v score from all tpl
     push rbx
-    sub rsp, 8
-    mov qword [rsp], rsi
-    fild qword [rsp]
-    mov rbx, ADIV
-    mov qword [rsp], rbx
-    fild qword [rsp]
-    fdivp                               ; st1/st0 + pop
-    fstp qword [rsp]
-    movsd xmm1, qword [rsp]
-    add rsp, 8                          ; delta in xmm1
+    movsd xmm1, xmm0                    ; xmm1 = delta*alpha 
     pxor xmm0, xmm0                     ; accumulator
     mov rcx, NUM_TPL
     v_tuples:
@@ -254,7 +252,7 @@ v_ofstate:
             jnz v_keygen
         mov r8, qword [tuple+(rcx*8)]
         test rsi, rsi                   ; + 0.0 == skip, may del
-        jnz no_update
+        jz no_update
         movsd xmm2, qword [r8+(rax*8)]
         addsd xmm2, xmm1
         movsd qword [r8+(rax*8)], xmm2
