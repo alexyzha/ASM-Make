@@ -1,8 +1,11 @@
 section .data
     OUTFILE     db      'outfile.txt', 0
     INFILE      db      'infile.txt', 0
+    SPC_PRNT    db      0x20, 0
+    NLN_PRNT    db      0xA, 0
     STR_PERC    db      '%s', 0xA, 0
     INT_PERC    db      '%d', 0xA, 0
+    INT_PNNL    db      '%d', 0
     INT_SPC     db      '%d', 0x20, 0
     FLT_PERC    db      '%f', 0xA, 0
     FILE_RD     db      'r', 0
@@ -10,11 +13,16 @@ section .data
     NUM_TPL     equ     17
     ALPHA       equ     25
     ADIV        equ     1000
+    BOUND1      equ     999
+    BOUND2      equ     99
+    BOUND3      equ     9
 
 section .bss
     tuple       resq    17
     config      resq    17
-    board       resd    16
+    board       resd    16              ; game board (shared with bot)
+    bot_ast     resd    16              ; bot afterstate
+    gam_ast     resd    16              ; game afterstate
     fileh       resq    1
 
 section .text
@@ -38,16 +46,21 @@ _start:
 
     mov rdi, board
     mov rsi, 0
-    mov rdx, 128
+    mov rdx, 64
     call memset
 
     mov rbx, 0
-    mov rcx, 16384
+    mov rcx, 8192
     LOOP:
-        mov qword [board+(rbx*8)], rcx
+        mov dword [board+(rbx*4)], ecx
         inc rbx
         cmp rbx, 17
         jne LOOP
+
+
+    mov rdi, board                      ; setw(x) test SPECIFIC FOR THIS SCENARIO
+    call print_board
+
 
     sub rsp, 8
     fld1
@@ -224,6 +237,60 @@ delete_config:
     pop rbx
     ret
 
+print_board:
+    ; rdi = board
+    push rbx
+    push r12
+    xor rbx, rbx
+    mov r12, rdi
+    mov rdi, NLN_PRNT
+    call printf
+    mov rdi, r12
+    print_all:
+        push rdi
+        mov r12d, dword [rdi+(rbx*4)]
+        cmp r12d, 9
+        jg print_sp3
+        mov rdi, SPC_PRNT
+        call printf
+        print_sp3:
+            cmp r12d, 99
+            jg print_sp2
+            mov rdi, SPC_PRNT
+            call printf
+        print_sp2:
+            cmp r12d, 999
+            jg print_sp1
+            mov rdi, SPC_PRNT
+            call printf
+        print_sp1:
+            cmp r12d, 9999
+            jg print_num
+            mov rdi, SPC_PRNT
+            call printf
+        print_num:
+            mov rdi, INT_PNNL
+            mov esi, r12d
+            call printf
+        mov rax, rbx                    ; check if end of row
+        inc rax
+        mov rcx, 4
+        div rcx
+        test rdx, rdx
+        jnz same_row                    ; i%4 != 0
+        mov rdi, NLN_PRNT
+        call printf
+        same_row:
+            pop rdi
+            inc rbx
+            cmp rbx, 16
+            jne print_all
+    mov rdi, NLN_PRNT
+    call printf
+    pop r12
+    pop rbx
+    ret
+
 v_ofstate:
     ; rdi = board, rsi = delta? 1/0
     ; xmm0 = avg v score from all tpl
@@ -239,7 +306,7 @@ v_ofstate:
         v_keygen:
             dec rdx
             mov rbx, qword [r8+(rdx*8)] ; config num
-            mov rbx, qword [rdi+(rbx*8)]; get board val
+            mov ebx, dword [rdi+(rbx*4)]; get board val
             test rbx, rbx
             bsr rbx, rbx                ; log2
             jmp key_done
