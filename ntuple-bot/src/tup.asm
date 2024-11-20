@@ -36,6 +36,43 @@ _start:
     mov rsi, config
     call init_config
 
+    mov rdi, board
+    mov rsi, 0
+    mov rdx, 128
+    call memset
+
+    mov rbx, 0
+    mov rcx, 16384
+    LOOP:
+        mov qword [board+(rbx*8)], rcx
+        inc rbx
+        cmp rbx, 17
+        jne LOOP
+
+    sub rsp, 8
+    fld1
+    fld1
+    faddp
+    fstp qword [rsp]
+    movsd xmm0, qword [rsp]
+    add rsp, 8
+    mov rbx, 0
+    mov rcx, 15
+    imul rcx, rcx
+    imul rcx, rcx
+    dec rcx
+    LOOP2:
+        mov rax, qword [tuple+(rbx*8)]
+        movsd qword [rax+(rcx*8)], xmm0
+        inc rbx
+        cmp rbx, 17
+        jne LOOP2
+    mov rdi, board
+    xor rsi, rsi
+    call v_ofstate                      ; HOLY SHIT VSTATE WORKS 1ST TRY LESGO
+
+    mov rdi, FLT_PERC
+    call printf
 
     mov rdi, tuple                      ; clean tuple
     call delete_tuples
@@ -216,13 +253,13 @@ v_ofstate:
             test rdx, rdx
             jnz v_keygen
         mov r8, qword [tuple+(rcx*8)]
-        test rsi, rsi
+        test rsi, rsi                   ; + 0.0 == skip, may del
         jnz no_update
-        movsd xmm2, qword [r8+(rbx*8)]
+        movsd xmm2, qword [r8+(rax*8)]
         addsd xmm2, xmm1
-        movsd qword [r8+(rbx*8)], xmm2
+        movsd qword [r8+(rax*8)], xmm2
         no_update:
-        addsd xmm0, qword [r8+(rbx*8)]  ; += tuple[i][key]
+        addsd xmm0, qword [r8+(rax*8)]  ; += tuple[i][key]
         test rcx, rcx
         jnz v_tuples
     sub rsp, 8
