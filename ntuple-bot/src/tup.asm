@@ -29,22 +29,18 @@ section .text
     extern rand
 
 _start:
-    mov rdi, tuple
+    finit                               ; :|
+    mov rdi, tuple                      ; init tuple
     call init_tuples
-
-    mov rdi, INFILE
+    mov rdi, INFILE                     ; init tpl config
     mov rsi, config
     call init_config
 
-    mov rdi, config
-    call print_config
 
-    mov rdi, tuple
+    mov rdi, tuple                      ; clean tuple
     call delete_tuples
-
-    mov rdi, config
+    mov rdi, config                     ; clean tpl config
     call delete_config
-
     mov rax, 60
     xor rdi, rdi
     syscall
@@ -181,5 +177,61 @@ delete_config:
         pop rdi
         test rbx, rbx
         jnz delete_cfg_loop
+    pop rbx
+    ret
+
+v_ofstate:
+    ; rdi = board, rsi = delta (*1000->int)
+    ; xmm0 = avg v score from all tpl
+    push rbx
+    sub rsp, 8
+    mov qword [rsp], rsi
+    fild qword [rsp]
+    mov rbx, ADIV
+    mov qword [rsp], rbx
+    fild qword [rsp]
+    fdivp                               ; st1/st0 + pop
+    fstp qword [rsp]
+    movsd xmm1, qword [rsp]
+    add rsp, 8                          ; delta in xmm1
+    pxor xmm0, xmm0                     ; accumulator
+    mov rcx, NUM_TPL
+    v_tuples:
+        dec rcx
+        mov rdx, 4                      ; get key(state,tpl)
+        xor rax, rax
+        mov r8, qword [config+(rcx*8)]  ; p->cfg[i]
+        v_keygen:
+            dec rdx
+            mov rbx, qword [r8+(rdx*8)] ; config num
+            mov rbx, qword [rdi+(rbx*8)]; get board val
+            test rbx, rbx
+            bsr rbx, rbx                ; log2
+            jmp key_done
+            key_zero:
+                xor rbx, rbx
+            key_done:                   ; rbx = log2(board[config[i][j]])
+            imul rax, rax, 15
+            add rax, rbx
+            test rdx, rdx
+            jnz v_keygen
+        mov r8, qword [tuple+(rcx*8)]
+        test rsi, rsi
+        jnz no_update
+        movsd xmm2, qword [r8+(rbx*8)]
+        addsd xmm2, xmm1
+        movsd qword [r8+(rbx*8)], xmm2
+        no_update:
+        addsd xmm0, qword [r8+(rbx*8)]  ; += tuple[i][key]
+        test rcx, rcx
+        jnz v_tuples
+    sub rsp, 8
+    mov rbx, NUM_TPL
+    mov qword [rsp], rbx
+    fild qword [rsp]
+    fstp qword [rsp]
+    movsd xmm1, qword [rsp]
+    add rsp, 8
+    divsd xmm0, xmm1                    ; average
     pop rbx
     ret
