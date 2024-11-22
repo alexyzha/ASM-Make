@@ -65,6 +65,11 @@ _start:
     mov rsi, 0
     mov rdx, 64
     call memset
+    
+    mov rdi, bot_ast
+    mov rsi, 0
+    mov rdx, 64
+    call memset
 
     mov rbx, 0                          ; seed board
     mov rcx, 2
@@ -76,42 +81,19 @@ _start:
 
     mov rdi, board                      ; setw(x) test SPECIFIC FOR THIS SCENARIO
     call print_board
+    mov rdi, board
+    mov rsi, bot_ast
+    call copy_board
+    mov rdi, bot_ast
+    call print_board
 
-    mov rdi, board                      ; mov up
-    mov rsi, 0
-    call sim_move
+    mov rdi, board
+    mov rsi, bot_ast
+    call board_equal
+
     mov rdi, INT_PERC
     mov rsi, rax
     call printf
-    mov rdi, board
-    call print_board
-
-    mov rdi, board                      ; mov right
-    mov rsi, 1
-    call sim_move
-    mov rdi, INT_PERC
-    mov rsi, rax
-    call printf
-    mov rdi, board
-    call print_board
-
-    mov rdi, board                      ; mov down
-    mov rsi, 2
-    call sim_move
-    mov rdi, INT_PERC
-    mov rsi, rax
-    call printf
-    mov rdi, board
-    call print_board
-
-    mov rdi, board                      ; mov left
-    mov rsi, 3
-    call sim_move
-    mov rdi, INT_PERC
-    mov rsi, rax
-    call printf
-    mov rdi, board
-    call print_board
 
     mov rdi, tuple                      ; clean tuple
     call delete_tuples
@@ -314,6 +296,32 @@ print_board:
     add rsp, 8
     ret
 
+copy_board:
+    ; rdi = src, rsi = dst
+    xor rcx, rcx
+    copy_board_loop:
+        mov edx, dword [rdi+(rcx*4)]
+        mov dword [rsi+(rcx*4)], edx
+        inc rcx
+        cmp rcx, 16
+        jne copy_board_loop
+    ret
+
+board_equal:
+    ; rdi = 1, rsi = 2
+    xor rcx, rcx
+    xor rax, rax
+    board_equal_loop:
+        mov edx, dword [rdi+(rcx*4)]
+        cmp edx, dword [rsi+(rcx*4)]
+        jne board_equal_end
+        inc rcx
+        cmp rcx, 16
+        jne board_equal_loop
+    inc rax
+    board_equal_end:
+        ret
+
 v_ofstate:
     ; rdi = board, rsi = delta? 1/0
     ; xmm0 = delta
@@ -393,45 +401,45 @@ sim_move:
         xor r8, r8                      ; vec back
         xor r12, r12
         sim_move_inner:
-            mov rcx, qword [BASE+(rsi*8)]     ; base[action]
-            mov ecx, dword [rcx+(rbx*4)]      ; base[action][i]
-            mov edx, dword [DIR+(rsi*4)]      ; dir[action]
-            imul edx, r12d                    ; j*dir[action]
-            add ecx, edx                      ; corr cur ind in line
-            mov edx, dword [board+(rcx*4)]    ; edx = board[index]
+            mov rcx, qword [BASE+(rsi*8)]       ; base[action]
+            mov ecx, dword [rcx+(rbx*4)]        ; base[action][i]
+            mov edx, dword [DIR+(rsi*4)]        ; dir[action]
+            imul edx, r12d                      ; j*dir[action]
+            add ecx, edx                        ; corr cur ind in line
+            mov edx, dword [board+(rcx*4)]      ; edx = board[index]
             test edx, edx
             jz sim_move_inner_next
-            test r8, r8                       ; nothing to combine
+            test r8, r8                         ; nothing to combine
             jz sim_move_pb_normal
             dec r8
             mov r9d, dword [templn+(r8*4)]
             inc r8
-            cmp r9d, edx                      ; combine if eq 
+            cmp r9d, edx                        ; combine if eq 
             jne sim_move_pb_normal
             dec r8
-            shl edx, 1                        ; merge tile
-            add eax, edx                      ; add score
-            or edx, MASK_ON                   ; mask 0x80...
+            shl edx, 1                          ; merge tile
+            add eax, edx                        ; add score
+            or edx, MASK_ON                     ; mask 0x80...
             sim_move_pb_normal:
                 mov dword [templn+(r8*4)], edx
                 inc r8
-            sim_move_inner_next:              ; next row/col
+            sim_move_inner_next:                ; next row/col
                 inc r12
                 cmp r12, 4
                 jne sim_move_inner
         xor r12, r12
         sim_move_inner_pln:
             mov rcx, qword [BASE+(rsi*8)]
-            mov ecx, dword [rcx+(rbx*4)]      ; base[action][i]
+            mov ecx, dword [rcx+(rbx*4)]        ; base[action][i]
             mov edx, dword [DIR+(rsi*4)]
             imul edx, r12d
-            add ecx, edx                      ; ecx = index
+            add ecx, edx                        ; ecx = index
             mov dword [rdi+(rcx*4)], 0
             cmp r12, r8
             jge sim_move_inner_pln_done
-            mov edx, dword [templn+(r12*4)]   ; edx = line[j]
+            mov edx, dword [templn+(r12*4)]     ; edx = line[j]
             and edx, MASK_OFF
-            mov dword [rdi+(rcx*4)], edx      ; afterstate[index] = line[j] if j < line.size()
+            mov dword [rdi+(rcx*4)], edx        ; afterstate[index] = line[j] if j < line.size()
             sim_move_inner_pln_done:
                 inc r12
                 cmp r12, 4
@@ -443,4 +451,5 @@ sim_move:
     pop rbx
     ret
 
-
+evaluate:
+    ; rdi = state, rsi = action
