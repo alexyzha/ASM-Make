@@ -1,6 +1,10 @@
 section .data
+; FILE
     OUTFILE     db      'outfile.txt', 0
     INFILE      db      'infile.txt', 0
+    FILE_RD     db      'r', 0
+
+; PRINT
     SPC_PRNT    db      0x20, 0
     NLN_PRNT    db      0xA, 0
     STR_PERC    db      '%s', 0xA, 0
@@ -8,14 +12,26 @@ section .data
     INT_PNNL    db      '%d', 0
     INT_SPC     db      '%d', 0x20, 0
     FLT_PERC    db      '%f', 0xA, 0
-    FILE_RD     db      'r', 0
+
+; DIRS
+    DIR         dd      4, -1, -4, 1
+    UP          dd      0, 1, 2, 3
+    RIGHT       dd      3, 7, 11, 15
+    DOWN        dd      12, 13, 14, 15
+    LEFT        dd      0, 4, 8, 12
+    BASE        dq      UP, RIGHT, DOWN, LEFT
+
+; BOT BASE + CONSTS
     MAX_P2      equ     15
     NUM_TPL     equ     17
     ALPHA       equ     25
     ADIV        equ     1000
-    BOUND1      equ     999
-    BOUND2      equ     99
-    BOUND3      equ     9
+    BOUND1      equ     9999
+    BOUND2      equ     999
+    BOUND3      equ     99
+    BOUND4      equ     9
+    MOVMASK     equ     0x80000000
+
 
 section .bss
     tuple       resq    17
@@ -23,6 +39,7 @@ section .bss
     board       resd    16              ; game board (shared with bot)
     bot_ast     resd    16              ; bot afterstate
     gam_ast     resd    16              ; game afterstate
+    templn      resd    4               ; vector subsitute
     fileh       resq    1
 
 section .text
@@ -249,22 +266,22 @@ print_board:
     print_all:
         push rdi
         mov r12d, dword [rdi+(rbx*4)]
-        cmp r12d, 9
+        cmp r12d, BOUND4
         jg print_sp3
         mov rdi, SPC_PRNT
         call printf
         print_sp3:
-            cmp r12d, 99
+            cmp r12d, BOUND3
             jg print_sp2
             mov rdi, SPC_PRNT
             call printf
         print_sp2:
-            cmp r12d, 999
+            cmp r12d, BOUND2
             jg print_sp1
             mov rdi, SPC_PRNT
             call printf
         print_sp1:
-            cmp r12d, 9999
+            cmp r12d, BOUND1
             jg print_num
             mov rdi, SPC_PRNT
             call printf
@@ -293,8 +310,21 @@ print_board:
 
 v_ofstate:
     ; rdi = board, rsi = delta? 1/0
-    ; xmm0 = avg v score from all tpl
+    ; xmm0 = delta
+    ; returns xmm0 = avg v score from all tpl
     push rbx
+    sub rsp, 8
+    mov rbx, ALPHA                      ; wah wah cant load from register
+    mov qword [rsp], rbx                ; wah wah i need to load from memoy
+    fild qword [rsp]                    ; wah wah
+    mov rbx, ADIV
+    mov qword [rsp], rbx
+    fild qword [rsp]
+    fdivp
+    fstp qword [rsp]
+    movsd xmm2, qword [rsp]
+    mulsd xmm0, xmm2
+    add rsp, 8                          ; if it works it works ig
     movsd xmm1, xmm0                    ; xmm1 = delta*alpha 
     pxor xmm0, xmm0                     ; accumulator
     mov rcx, NUM_TPL
@@ -308,10 +338,8 @@ v_ofstate:
             mov rbx, qword [r8+(rdx*8)] ; config num
             mov ebx, dword [rdi+(rbx*4)]; get board val
             test rbx, rbx
+            jz key_done
             bsr rbx, rbx                ; log2
-            jmp key_done
-            key_zero:
-                xor rbx, rbx
             key_done:                   ; rbx = log2(board[config[i][j]])
             imul rax, rax, 15
             add rax, rbx
@@ -337,3 +365,58 @@ v_ofstate:
     divsd xmm0, xmm1                    ; average
     pop rbx
     ret
+
+sim_move:
+    ; rdi = dest, rsi = dir
+    ; return rax = score
+    push rbx
+    push r12
+    xor rax, rax
+    xor rbx, rbx
+    sim_move_outer:
+        push rdi                        ; this sucks
+        push rsi
+        push rax
+        mov rdi, templn
+        xor rsi, rsi
+        mov rdx, 16
+        call memset
+        pop rax
+        pop rsi
+        pop rdi
+        xor r8, r8                      ; vec back
+        xor r12, r12
+        sim_move_inner:
+            mov rcx, qword [BASE+(rsi*8)]     ; base[action]
+            mov ecx, dword [rcx+(rbx*4)]      ; base[action][i]
+            add edx, dword [DIR+(rsi*4)]      ; dir[action]
+            imul edx, r12d               ; j*dir[action]
+            add ecx, edx                      ; corr cur ind in line
+            mov edx, dword [board+(rcx*4)]    ; edx = board[index]
+            test edx, edx
+            jz sim_move_inner_next
+            test r8, r8
+            jz sim_move_pb_normal
+
+
+
+
+            sim_move_pb_normal:
+                mov dword [templn+(r8*4)], edx
+                inc r8
+
+            sim_move_inner_next:
+                inc r12
+                cmp r12, 4
+                jne sim_move_inner
+        
+        ; process vec here
+
+        inc rbx
+        cmp rbx, 4
+        jne sim_move_outer
+    pop r12
+    pop rbx
+    ret
+
+
