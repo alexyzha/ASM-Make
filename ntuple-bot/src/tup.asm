@@ -90,31 +90,27 @@ _start:
     call print_board
 
     mov rdi, board
-    mov rsi, 0
-    call evaluate
-    
-    mov rdi, FLT_PERC
-    xor rax, rax
-    mov al, 1                           ; NUMBER OF XMM REG IN al
-    call printf
-
-    mov rdi, bot_ast
+    call choose_action
+    mov rdi, board
+    mov rsi, rax
+    call sim_move
+    mov rdi, board
     call print_board
 
-    mov rdi, bot_ast
-    mov rsi, board
-    call copy_board
+    mov rdi, board
+    call choose_action
+    mov rdi, board
+    mov rsi, rax
+    call sim_move
+    mov rdi, board
+    call print_board
 
     mov rdi, board
-    mov rsi, 0
-    call evaluate
-
-    mov rdi, FLT_PERC
-    xor rax, rax
-    mov al, 1
-    call printf
-
-    mov rdi, bot_ast
+    call choose_action
+    mov rdi, board
+    mov rsi, rax
+    call sim_move
+    mov rdi, board
     call print_board
 
     mov rdi, tuple                      ; clean tuple
@@ -503,3 +499,33 @@ evaluate:
     addsd xmm0, xmm1                    ; return xmm0
     evaluate_done:
         ret
+
+choose_action:
+    ; rdi = state
+    push rbx
+    push r12
+    mov r12, rdi
+    xor rbx, rbx
+    sub rsp, 24                         ; +[action][best score]- both qword
+    mov rax, -1
+    mov qword [rsp+8], rax
+    mov qword [rsp], rax
+    fild qword [rsp]
+    fstp qword [rsp]                    ; -40 stack -8 fxn = aligned
+    choose_action_enum:
+        mov rdi, r12
+        mov rsi, rbx
+        call evaluate
+        comisd xmm0, qword [rsp]
+        jbe choose_action_enum_lower
+        movsd qword [rsp], xmm0
+        mov qword [rsp+8], rbx
+        choose_action_enum_lower:
+            inc rbx
+            cmp rbx, 4
+            jne choose_action_enum
+    mov rax, qword [rsp+8]
+    add rsp, 24
+    pop r12
+    pop rbx
+    ret
