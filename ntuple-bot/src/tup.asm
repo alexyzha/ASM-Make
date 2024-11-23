@@ -78,22 +78,44 @@ _start:
         inc rbx
         cmp rbx, 16
         jne LOOP
+    mov rbx, 0
+    mov rcx, 4
+    LOOP2:
+        mov dword [board+(rbx*4)], ecx
+        add rbx, 2
+        cmp rbx, 16
+        jne LOOP2
 
     mov rdi, board                      ; setw(x) test SPECIFIC FOR THIS SCENARIO
     call print_board
+
     mov rdi, board
-    mov rsi, bot_ast
-    call copy_board
+    mov rsi, 0
+    call evaluate
+    
+    mov rdi, FLT_PERC
+    xor rax, rax
+    mov al, 1                           ; NUMBER OF XMM REG IN al
+    call printf
+
     mov rdi, bot_ast
     call print_board
 
-    mov rdi, board
-    mov rsi, bot_ast
-    call board_equal
+    mov rdi, bot_ast
+    mov rsi, board
+    call copy_board
 
-    mov rdi, INT_PERC
-    mov rsi, rax
+    mov rdi, board
+    mov rsi, 0
+    call evaluate
+
+    mov rdi, FLT_PERC
+    xor rax, rax
+    mov al, 1
     call printf
+
+    mov rdi, bot_ast
+    call print_board
 
     mov rdi, tuple                      ; clean tuple
     call delete_tuples
@@ -314,12 +336,12 @@ board_equal:
     board_equal_loop:
         mov edx, dword [rdi+(rcx*4)]
         cmp edx, dword [rsi+(rcx*4)]
-        jne board_equal_end
+        jne board_equal_done
         inc rcx
         cmp rcx, 16
         jne board_equal_loop
     inc rax
-    board_equal_end:
+    board_equal_done:
         ret
 
 v_ofstate:
@@ -453,3 +475,31 @@ sim_move:
 
 evaluate:
     ; rdi = state, rsi = action
+    ; sim_move preserves rdi/rsi
+    ; return eval val in xmm0
+    push rdi                            ; need stack align + also for sim move
+    mov rdi, bot_ast                    ; rsi = action
+    call sim_move
+    pop rsi                             ; rsi = board, rdi = bot_ast
+    mov r8, rax
+    sub rsp, 8                          ; i cant wait for the day where i learn a better alternative to whatever tf this is
+    mov rcx, -2
+    mov qword [rsp], rcx
+    fild qword [rsp]
+    fstp qword [rsp]
+    movsd xmm0, qword [rsp]
+    add rsp, 8
+    call board_equal
+    test rax, rax
+    jnz evaluate_done                    ; no move = illegal
+    sub rsp, 8
+    mov qword [rsp], r8                 ; r8 = sim_move score
+    fild qword [rsp]
+    fstp qword [rsp]
+    xor rsi, rsi                        ; rdi = bot_ast, rsi = 0 (no train)
+    call v_ofstate
+    movsd xmm1, qword [rsp]
+    add rsp, 8
+    addsd xmm0, xmm1                    ; return xmm0
+    evaluate_done:
+        ret
