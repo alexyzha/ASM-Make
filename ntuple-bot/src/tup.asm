@@ -401,6 +401,7 @@ v_ofstate:
 sim_move:
     ; rdi = dest, rsi = dir
     ; return rax = score
+    ; sim_move = game_move, set dest to board
     push rbx
     push r12
     xor rax, rax
