@@ -60,7 +60,7 @@ section .text
 
 _start:
     finit                               ; we love floats
-    mov rax, 0x1b00fa55                 ; seed
+    mov rax, 0xb000b1e5                 ; seed
     call srand
     mov rdi, tuple                      ; init tuple
     call init_tuples
@@ -80,7 +80,7 @@ _start:
 
     xor rbx, rbx
     xor r13, r13                        ; winrate
-    mov r12, 500000
+    mov r12, 1000000
     LOOP_TUAH:
         mov rdi, INT_PERC
         mov rsi, r12
