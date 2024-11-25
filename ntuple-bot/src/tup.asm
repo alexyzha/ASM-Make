@@ -52,73 +52,43 @@ section .text
     extern memset
     extern free
     extern rand
+    extern srand
 
 _start:
-    finit                               ; :|
+    finit                               ; we love floats
+    
+    mov rax, 0x1b00fa55                 ; seed
+    call srand
+    
     mov rdi, tuple                      ; init tuple
     call init_tuples
+    
     mov rdi, INFILE                     ; init tpl config
     mov rsi, config
     call init_config
-
-    mov rdi, board
-    mov rsi, 0
-    mov rdx, 64
-    call memset
     
+    mov rdi, board                      ; zero actual and ast boards
+    call zero_board
     mov rdi, bot_ast
-    mov rsi, 0
-    mov rdx, 64
-    call memset
-
-    mov rbx, 0                          ; seed board
-    mov rcx, 2
-    LOOP:
-        mov dword [board+(rbx*4)], ecx
-        inc rbx
-        cmp rbx, 16
-        jne LOOP
-    mov rbx, 0
-    mov rcx, 4
-    LOOP2:
-        mov dword [board+(rbx*4)], ecx
-        add rbx, 2
-        cmp rbx, 16
-        jne LOOP2
-
-    mov rdi, board                      ; setw(x) test SPECIFIC FOR THIS SCENARIO
-    call print_board
-
-    mov rdi, board
-    call can_place
-    mov rdi, INT_PERC
-    mov rsi, rax
-    call printf
-
-    mov rdi, board
-    call choose_action
-    mov rdi, board
-    mov rsi, rax
-    call sim_move
-    mov rdi, board
-    call print_board
-
-    mov rdi, board
-    call can_place
-    mov rdi, INT_PERC
-    mov rsi, rax
-    call printf
+    call zero_board
+    mov rdi, gam_ast
+    call zero_board
 
     xor rbx, rbx
+    mov r12, 10000
     LOOP_TUAH:
-        mov rdi, board
-        mov rsi, 1
-        call make_tile
-        mov rdi, board
-        call print_board
-        inc rbx
-        cmp rbx, 8
-        jne LOOP_TUAH
+        call run_game
+        add rbx, rax
+        mov rdi, INT_PERC
+        mov rsi, rax
+        call printf
+        dec r12
+        test r12, r12
+        jnz LOOP_TUAH
+    
+    mov rdi, INT_PERC
+    mov rsi, rbx
+    call printf
 
     mov rdi, tuple                      ; clean tuple
     call delete_tuples
@@ -332,6 +302,15 @@ copy_board:
         jne copy_board_loop
     ret
 
+zero_board:
+    ; rdi = board
+    sub rsp, 8                          ; align stack bc memset is a little shit
+    xor rsi, rsi
+    mov rdx, 64                         ; 16 dwords = 16*4 = 64
+    call memset
+    add rsp, 8
+    ret
+
 board_equal:
     ; rdi = 1, rsi = 2
     xor rcx, rcx
@@ -538,6 +517,49 @@ choose_action:
     pop rbx
     ret
 
+learn:
+    ; in GAME LOOP:
+    ; game generates afterstate in gam_ast
+    ; copy gam_ast -> board
+    ; make next state with board (+tile)
+    ; ast = gam_ast
+    ; next state = board
+    push rbx
+    pxor xmm0, xmm0                     ; v_nextast
+    xor rbx, rbx                        ; r_next
+    mov rdi, board
+    call choose_action
+    cmp rax, -1
+    je learn_val_final
+    mov rdi, bot_ast
+    mov rsi, rax                        ; move dir
+    call sim_move                       ; bot_ast = nextast, luckily im not stupy; src = board = next state which is what it should be
+    mov rbx, rax
+    mov rdi, bot_ast                    ; get v(next ast)
+    xor rsi, rsi
+    pxor xmm0, xmm0
+    call v_ofstate
+    learn_val_final:
+        sub rsp, 16
+        movsd qword [rsp], xmm0
+        mov rdi, gam_ast
+        xor rsi, rsi
+        pxor xmm0, xmm0
+        call v_ofstate
+        movsd xmm1, qword [rsp]
+        subsd xmm1, xmm0
+        mov qword [rsp], rbx            ; int->float
+        fild qword [rsp]
+        fstp qword [rsp]
+        addsd xmm1, qword [rsp]
+        movsd xmm0, xmm1                ; final delta
+        add rsp, 16
+        mov rdi, gam_ast
+        mov rsi, 1
+        call v_ofstate
+    pop rbx
+    ret
+
 can_place:
     ; rdi = state
     xor rcx, rcx
@@ -595,6 +617,51 @@ make_tile:
         test r12, r12
         jnz make_tile_iter
     make_tile_done:
+        pop r12
+        pop rbx
+        ret
+
+run_game:
+    ; runs an instance of game
+    ; rdi = train?
+    ; return score | 0x80... if win, since score cant get up to 2b
+    push rbx
+    push r12
+    push r13
+    mov rbx, rdi                        ; train?
+    mov r12, 1                          ; is running
+    xor r13, r13                        ; score
+    mov rdi, board                      ; init board
+    call zero_board
+    mov rdi, board
+    mov rsi, 2
+    call make_tile
+    run_game_running:
+        mov rdi, board
+        call choose_action
+        cmp rax, -1
+        je run_game_stop
+        mov rdi, gam_ast
+        mov rsi, rax
+        call sim_move
+        add r13, rax
+        mov rdi, gam_ast                ; set nextstate/ast
+        mov rsi, board
+        call copy_board
+        mov rdi, board
+        mov rsi, 1
+        call make_tile
+        test rbx, rbx
+        jz run_game_no_train
+        call learn
+        run_game_no_train:
+        test r12, r12
+        jnz run_game_running
+    run_game_stop:
+        mov rdi, board
+        call print_board
+        mov rax, r13                    ; return score
+        pop r13
         pop r12
         pop rbx
         ret
