@@ -90,12 +90,10 @@ _start:
     call print_board
 
     mov rdi, board
-    call choose_action
-    mov rdi, board
+    call can_place
+    mov rdi, INT_PERC
     mov rsi, rax
-    call sim_move
-    mov rdi, board
-    call print_board
+    call printf
 
     mov rdi, board
     call choose_action
@@ -106,12 +104,21 @@ _start:
     call print_board
 
     mov rdi, board
-    call choose_action
-    mov rdi, board
+    call can_place
+    mov rdi, INT_PERC
     mov rsi, rax
-    call sim_move
-    mov rdi, board
-    call print_board
+    call printf
+
+    xor rbx, rbx
+    LOOP_TUAH:
+        mov rdi, board
+        mov rsi, 1
+        call make_tile
+        mov rdi, board
+        call print_board
+        inc rbx
+        cmp rbx, 8
+        jne LOOP_TUAH
 
     mov rdi, tuple                      ; clean tuple
     call delete_tuples
@@ -530,3 +537,64 @@ choose_action:
     pop r12
     pop rbx
     ret
+
+can_place:
+    ; rdi = state
+    xor rcx, rcx
+    mov rax, 1
+    can_place_iter:
+        mov edx, dword [rdi+(rcx*4)]
+        test edx, edx
+        jz can_place_done
+        inc rcx
+        cmp rcx, 16
+        jne can_place_iter
+    xor rax, rax
+    can_place_done:
+        ret
+
+rand_tile:
+    sub rsp, 8
+    call rand
+    add rsp, 8
+    mov rcx, 10
+    div rcx
+    mov rax, 2
+    test rdx, rdx
+    jnz rand_tile_done
+    shl rax, 1
+    rand_tile_done:
+        ret
+
+make_tile:
+    ; rdi = state, rsi = ct
+    ; return void
+    push rbx
+    push r12                            ; stack maln need -8 more
+    mov rbx, rdi                        ; rbx = rdi, r12 = rsi
+    mov r12, rsi
+    make_tile_iter:
+        mov rdi, rbx
+        call can_place
+        test rax, rax
+        jz make_tile_done               ; can't place any more
+        sub rsp, 8
+        make_tile_find:
+            call rand
+            mov rcx, 16
+            div rcx                     ; rdx = rax%rcx
+            mov ecx, dword [rbx+(rdx*4)]
+            test ecx, ecx
+            jnz make_tile_find          ; val exists
+        mov qword [rsp], rdx            ; rdx = index = rand%16
+        call rand_tile
+        mov rdx, qword [rsp]
+        mov dword [rbx+(rdx*4)], eax    ; set val in board
+        add rsp, 8
+        dec r12
+        test r12, r12
+        jnz make_tile_iter
+    make_tile_done:
+        pop r12
+        pop rbx
+        ret
