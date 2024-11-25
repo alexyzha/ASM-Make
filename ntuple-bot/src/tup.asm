@@ -2,7 +2,9 @@ section .data
 ; FILE
     OUTFILE     db      'outfile.txt', 0
     INFILE      db      'infile.txt', 0
+    STATFL      db      'stats.txt', 0
     FILE_RD     db      'r', 0
+    FILE_WR     db      'w', 0
 
 ; PRINT
     SPC_PRNT    db      0x20, 0
@@ -26,6 +28,7 @@ section .data
     NUM_TPL     equ     17
     ALPHA       equ     25
     ADIV        equ     1000
+    TPL_MAX     equ     50625
     BOUND1      equ     9999
     BOUND2      equ     999
     BOUND3      equ     99
@@ -47,6 +50,7 @@ section .text
     extern fopen
     extern fscanf
     extern fclose
+    extern fprintf
     extern printf
     extern malloc
     extern memset
@@ -74,22 +78,58 @@ _start:
     mov rdi, gam_ast
     call zero_board
 
+    mov rdi, STATFL
+    mov rsi, FILE_WR
+    call fopen
+    mov qword [fileh], rax
+
     xor rbx, rbx
-    mov r12, 10000
+    xor r13, r13                        ; winrate
+    mov r12, 500
     LOOP_TUAH:
-        call run_game
-        add rbx, rax
         mov rdi, INT_PERC
-        mov rsi, rax
+        mov rsi, r12
         call printf
+
+        call run_game
+        test rax, MASK_ON
+        jz no_win
+        inc r13
+        and rax, MASK_OFF
+        no_win:
+            add rbx, rax
+        
+        ; TESTING FPRINTF
         dec r12
+
+        mov rax, r12
+        mov rcx, 500
+        xor rdx, rdx
+        div rcx
+        test rdx, rdx
+        jnz no_save
+
+        mov rdi, qword [fileh]
+        mov rsi, INT_PERC
+        mov rdx, rbx
+        call fprintf
+        xor rbx, rbx
+        mov rdi, qword [fileh]
+        mov rsi, INT_PERC
+        mov rdx, r13
+        call fprintf
+        xor r13, r13
+
+        no_save:
         test r12, r12
         jnz LOOP_TUAH
-    
-    mov rdi, INT_PERC
-    mov rsi, rbx
-    call printf
 
+    mov rdi, qword [fileh]
+    call fclose
+    mov qword [fileh], 0
+
+    mov rdi, OUTFILE                    ; save tuple
+    call save_tuples
     mov rdi, tuple                      ; clean tuple
     call delete_tuples
     mov rdi, config                     ; clean tpl config
@@ -233,6 +273,55 @@ delete_config:
     pop rbx
     ret
 
+save_tuples:
+    ; rdi = filename
+    push rbx
+    push r12
+    push r13
+    mov rsi, FILE_WR
+    call fopen
+    test rax, rax
+    jz save_tuples_done
+    mov qword [fileh], rax
+    xor rbx, rbx
+    save_tuple_enum:
+        xor r12, r12
+        mov r13, qword [config+(rbx*8)]
+        save_tuple_enum_config:         ; save config all in 1 line
+            mov rdi, qword [fileh]
+            mov rsi, INT_SPC
+            cmp r12, 3
+            jne save_tuple_enum_config_nonl
+            mov rsi, INT_PERC
+            save_tuple_enum_config_nonl:
+            mov edx, dword [r13+(r12*4)]
+            call fprintf
+            inc r12
+            cmp r12, 4
+            jne save_tuple_enum_config
+        xor r12, r12
+        mov r13, qword [tuple+(rbx*8)]  ; double = qword
+        save_tuple_enum_weight:
+            mov rdi, qword [fileh]
+            mov rsi, FLT_PERC
+            movsd xmm0, qword [r13+(r12*8)]
+            mov rax, 1                  ; al = xmm use count
+            call fprintf
+            inc r12
+            cmp r12, TPL_MAX
+            jne save_tuple_enum_weight
+        inc rbx
+        cmp rbx, NUM_TPL
+        jne save_tuple_enum
+    mov rdi, qword [fileh]              ; del file handle
+    call fclose
+    mov qword [fileh], 0
+    save_tuples_done:
+        pop r13
+        pop r12
+        pop rbx
+        ret
+
 print_board:
     ; rdi = board
     sub rsp, 8                          ; piss ass windows
@@ -273,6 +362,7 @@ print_board:
         mov rax, rbx                    ; check if end of row
         inc rax
         mov rcx, 4
+        xor rdx, rdx
         div rcx
         test rdx, rdx
         jnz same_row                    ; i%4 != 0
@@ -580,6 +670,7 @@ rand_tile:
     call rand
     add rsp, 8
     mov rcx, 10
+    xor rdx, rdx
     div rcx
     mov rax, 2
     test rdx, rdx
@@ -604,6 +695,7 @@ make_tile:
         make_tile_find:
             call rand
             mov rcx, 16
+            xor rdx, rdx
             div rcx                     ; rdx = rax%rcx
             mov ecx, dword [rbx+(rdx*4)]
             test ecx, ecx
@@ -658,9 +750,25 @@ run_game:
         test r12, r12
         jnz run_game_running
     run_game_stop:
-        mov rdi, board
-        call print_board
-        mov rax, r13                    ; return score
+        ; mov rdi, board
+        ; call print_board
+        xor rax, rax
+        xor rcx, rcx
+        xor rdx, rdx
+        run_game_max:
+            mov edx, dword [board+(rcx*4)]
+            cmp edx, eax
+            jle run_game_max_l
+            mov eax, edx
+            run_game_max_l:
+            inc rcx
+            cmp rcx, 16
+            jne run_game_max
+        cmp rax, 2048
+        jl run_game_no_mask
+        or r13, MASK_ON
+        run_game_no_mask:
+            mov rax, r13                    ; return score
         pop r13
         pop r12
         pop rbx
