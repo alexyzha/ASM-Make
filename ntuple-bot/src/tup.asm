@@ -1,12 +1,18 @@
 section .data
 ; FILE
-    OUTFILE     db      'outfile.txt', 0
-    INFILE      db      'infile.txt', 0
-    STATFL      db      'stats.txt', 0
+    BOTFILE     db      'dat/bot.txt', 0
+    OUTFILE     db      'dat/outfile.txt', 0
+    INFILE      db      'dat/infile.txt', 0
+    STATFL      db      'dat/stats.txt', 0
     FILE_RD     db      'r', 0
     FILE_WR     db      'w', 0
 
 ; PRINT
+    LINEDIV     db      '#=====================#', 0xA, 0
+    MS_PRNT     db      'Max score:', 0x20, '%d', 0xA, 0
+    MT_PRNT     db      'Max tile:', 0x20, '%d', 0xA, 0
+    AS_PRNT     db      'Average score:', 0x20, '%f', 0xA, 0
+    WR_PRNT     db      'Winrate:', 0x20, '%f', 0xA, 0
     SPC_PRNT    db      0x20, 0
     NLN_PRNT    db      0xA, 0
     STR_PERC    db      '%s', 0xA, 0
@@ -14,6 +20,7 @@ section .data
     INT_PNNL    db      '%d', 0
     INT_SPC     db      '%d', 0x20, 0
     FLT_PERC    db      '%f', 0xA, 0
+    DBL_PERC    db      '%lf', 0xA, 0   ; scan for double is diff from print float/dbl
 
 ; DIRS
     DIR         dd      4, -1, -4, 1
@@ -33,8 +40,11 @@ section .data
     BOUND2      equ     999
     BOUND3      equ     99
     BOUND4      equ     9
-    MASK_ON     equ     0x80000000
-    MASK_OFF    equ     0x7fffffff
+    MASK_ON     equ     0x40000000      ; mask moved down 1 bit
+    MASK_OFF    equ     0x3fffffff
+    DO_TRAIN    equ     0
+    DO_TEST     equ     1
+    SAVE_TPL    equ     0
 
 section .bss
     tuple       resq    17
@@ -73,38 +83,35 @@ _start:
     call zero_board
     mov rdi, gam_ast
     call zero_board
+    mov rax, DO_TRAIN                   ; skip train
+    test rax, rax
+    jz no_train
     mov rdi, STATFL                     ; file handle for stat file
     mov rsi, FILE_WR
     call fopen
     mov qword [fileh], rax
-
-    xor rbx, rbx
+    xor rbx, rbx                        ; sum score
     xor r13, r13                        ; winrate
-    mov r12, 1000000
-    LOOP_TUAH:
-        mov rdi, INT_PERC
+    mov r12, 500000
+    train_loop:
+        mov rdi, INT_PERC               ; print iters left
         mov rsi, r12
         call printf
-
         call run_game
-        test rax, MASK_ON
+        test rax, MASK_ON               ; get win or no win from mask
         jz no_win
         inc r13
         and rax, MASK_OFF
         no_win:
             add rbx, rax
-        
-        ; TESTING FPRINTF
         dec r12
-
         mov rax, r12
         mov rcx, 500
         xor rdx, rdx
         div rcx
         test rdx, rdx
         jnz no_save
-
-        mov rdi, qword [fileh]
+        mov rdi, qword [fileh]          ; save stats
         mov rsi, INT_PERC
         mov rdx, rbx
         call fprintf
@@ -114,16 +121,91 @@ _start:
         mov rdx, r13
         call fprintf
         xor r13, r13
-
         no_save:
         test r12, r12
-        jnz LOOP_TUAH
-
+        jnz train_loop
     mov rdi, qword [fileh]              ; clean file
     call fclose
     mov qword [fileh], 0
+    no_train:
+    mov rax, DO_TEST
+    test rax, rax
+    jz no_test
+    mov rdi, BOTFILE
+    call load_tuples
+    test rax, rax
+    jz no_test
+    mov rax, 0x1e37b00b
+    call srand
+    xor rbx, rbx                        ; max score
+    xor r13, r13                        ; winrate
+    xor r14, r14                        ; max tile
+    xor r15, r15                        ; average score
+    mov r12, 50000
+    test_loop:
+        xor rdi, rdi
+        call run_game
+        test rax, MASK_ON
+        jz test_no_win
+        inc r13
+        and rax, MASK_OFF
+        test_no_win:
+        add r15, rax                    ; add to total score, 64 bit not 2b
+        xor rcx, rcx
+        cmp rbx, rax
+        jge test_loop_enum_tiles
+        mov rbx, rax
+        test_loop_enum_tiles:
+            cmp r14d, dword [board+(rcx*4)]
+            jge test_loop_enum_tiles_noupdate
+            mov r14d, dword [board+(rcx*4)]
+            test_loop_enum_tiles_noupdate:
+            inc rcx
+            cmp rcx, 16
+            jne test_loop_enum_tiles
+        mov rdi, INT_PERC
+        mov rsi, r12
+        call printf
+        dec r12
+        test r12, r12
+        jnz test_loop
+    call print_line
+    mov rdi, MS_PRNT                    ; print max score
+    mov rsi, rbx
+    call printf
+    mov rdi, MT_PRNT                    ; print max tile
+    mov rsi, r14
+    call printf
+    sub rsp, 16                         ; print average score
+    mov qword [rsp], r15
+    fild qword [rsp]
+    mov dword [rsp], 50000
+    fild dword [rsp]
+    fdivp
+    fstp qword [rsp]
+    movsd xmm0, qword [rsp]
+    mov rdi, AS_PRNT
+    mov rax, 1
+    call printf
+    mov qword [rsp], r13                ; print winrate
+    fild qword [rsp]
+    mov dword [rsp], 50000
+    fild dword [rsp]
+    fdivp
+    fstp qword [rsp]
+    movsd xmm0, qword [rsp]
+    add rsp, 16
+    mov rdi, WR_PRNT
+    mov rax, 1
+    call printf
+    call print_line
+    no_test:
+    mov rax, SAVE_TPL                   ; save tuple by param
+    test rax, rax
+    jz no_save_tpl
     mov rdi, OUTFILE                    ; save tuple
     call save_tuples
+    no_save_tpl:
     mov rdi, tuple                      ; clean tuple
     call delete_tuples
     mov rdi, config                     ; clean tpl config
@@ -131,6 +213,13 @@ _start:
     mov rax, 60
     xor rdi, rdi
     syscall
+
+print_line:
+    sub rsp, 8
+    mov rdi, LINEDIV
+    call printf
+    add rsp, 8
+    ret
 
 init_tuples:
     ; rdi = tpl
@@ -288,7 +377,7 @@ save_tuples:
             jne save_tuple_enum_config_nonl
             mov rsi, INT_PERC
             save_tuple_enum_config_nonl:
-            mov edx, dword [r13+(r12*4)]
+            mov rdx, qword [r13+(r12*8)]    ; config array of qword
             call fprintf
             inc r12
             cmp r12, 4
@@ -311,6 +400,56 @@ save_tuples:
     call fclose
     mov qword [fileh], 0
     save_tuples_done:
+        pop r13
+        pop r12
+        pop rbx
+        ret
+
+load_tuples:
+    ; rdi = filename
+    ; return 1 = load, 0 = no load 
+    push rbx
+    push r12
+    push r13
+    mov rsi, FILE_RD
+    call fopen
+    test rax, rax
+    jz load_tuples_done
+    mov qword [fileh], rax
+    xor rbx, rbx
+    load_tuple_enum:
+        xor r12, r12
+        mov r13, qword [config+(rbx*8)]
+        load_tuple_enum_config:
+            mov rdi, qword [fileh]
+            mov rsi, INT_SPC
+            cmp r12, 3
+            jne load_tuple_enum_config_nonl
+            mov rsi, INT_PERC
+            load_tuple_enum_config_nonl:
+            lea rdx, qword [r13+(r12*8)]
+            call fscanf
+            inc r12
+            cmp r12, 4
+            jne load_tuple_enum_config
+        xor r12, r12
+        mov r13, qword [tuple+(rbx*8)]
+        load_tuple_enum_weight:
+            mov rdi, qword [fileh]
+            mov rsi, DBL_PERC
+            lea rdx, qword [r13+(r12*8)]
+            call fscanf
+            inc r12
+            cmp r12, TPL_MAX
+            jne load_tuple_enum_weight
+        inc rbx
+        cmp rbx, NUM_TPL
+        jne load_tuple_enum
+    mov rdi, qword [fileh]
+    call fclose
+    mov qword [fileh], 0
+    mov rax, 1
+    load_tuples_done:
         pop r13
         pop r12
         pop rbx
