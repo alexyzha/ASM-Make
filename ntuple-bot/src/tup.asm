@@ -60,32 +60,27 @@ section .text
 
 _start:
     finit                               ; we love floats
-    
     mov rax, 0x1b00fa55                 ; seed
     call srand
-    
     mov rdi, tuple                      ; init tuple
     call init_tuples
-    
     mov rdi, INFILE                     ; init tpl config
     mov rsi, config
     call init_config
-    
     mov rdi, board                      ; zero actual and ast boards
     call zero_board
     mov rdi, bot_ast
     call zero_board
     mov rdi, gam_ast
     call zero_board
-
-    mov rdi, STATFL
+    mov rdi, STATFL                     ; file handle for stat file
     mov rsi, FILE_WR
     call fopen
     mov qword [fileh], rax
 
     xor rbx, rbx
     xor r13, r13                        ; winrate
-    mov r12, 500
+    mov r12, 500000
     LOOP_TUAH:
         mov rdi, INT_PERC
         mov rsi, r12
@@ -124,10 +119,9 @@ _start:
         test r12, r12
         jnz LOOP_TUAH
 
-    mov rdi, qword [fileh]
+    mov rdi, qword [fileh]              ; clean file
     call fclose
     mov qword [fileh], 0
-
     mov rdi, OUTFILE                    ; save tuple
     call save_tuples
     mov rdi, tuple                      ; clean tuple
