@@ -6,6 +6,8 @@
 - `DONE` union-find
 - `DONE` vector
 - `DONE` avl-tree
+- `DONE` ntuple
+- `DONE` trie
 - `IN PROGRESS` seg-tree
 - `IN PROGRESS` rb-tree
 - `MAYBE` bitwise-seg?
