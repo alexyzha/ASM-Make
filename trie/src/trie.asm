@@ -1,8 +1,8 @@
 section .data
     INT_PERC    db      '%d', 0xA, 0
     STR_PERC    db      '%s', 0xA, 0
-    INSTR       db      'IXXXXXXXXXXXXXXX', 0
-    OUTSTR      db      'OXXXXXXXXXXXXXXX', 0
+    INSTR       db      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0
+    OUTSTR      db      1,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,0
 
 ; struct trie {
     children    equ     0
@@ -22,6 +22,35 @@ section .text
     extern printf
 
 _start:
+    call make_node                                  ; root = sentinel node
+    mov qword [root], rax    
+    mov rdi, INSTR                                  ; insert in
+    mov rsi, 16
+    call trie_insert
+    mov rdi, INSTR                                  ; find in (exp 1)
+    mov rsi, 16
+    call trie_find
+    mov rdi, INT_PERC
+    mov rsi, rax
+    call printf
+    mov rdi, OUTSTR                                 ; find out (exp 0)
+    mov rsi, 16
+    call trie_find
+    mov rdi, INT_PERC
+    mov rsi, rax
+    call printf
+    mov rdi, OUTSTR                                 ; insert out
+    mov rsi, 16
+    call trie_insert
+    mov rdi, OUTSTR                                 ; find out (exp 1)
+    mov rsi, 16
+    call trie_find
+    mov rdi, INT_PERC
+    mov rsi, rax
+    call printf
+    mov rdi, qword [root]                           ; clean
+    call clear
+    mov qword [root], 0
     mov rax, 60
     xor rdi, rdi
     syscall
@@ -74,7 +103,7 @@ make_node:
     add rsp, 8
     ret
 
-find:
+trie_find:
     ; rdi = p->str
     ; rsi = len
     xor rax, rax
@@ -96,7 +125,7 @@ find:
     find_done: 
     ret
 
-insert:
+trie_insert:
     ; rdi = p->str
     ; rsi = len
     push rbx
@@ -109,13 +138,25 @@ insert:
     mov rbx, qword [root]
     xor r13, r13
     insert_loop:
-        mov r12, qword [rbx+children]
+        mov r12, qword [rbx+children]               ; r12 = node->children
         xor r8, r8
         mov r8b, byte [r14+r13]
-
-        ; FIN ITER TRIE
-
-
+        mov rcx, qword [r12+(r8*8)]                 ; p->next
+        sub rsp, 16
+        mov qword [rsp], r8                         ; save char num
+        test rcx, rcx
+        jnz insert_no_make
+        call make_node
+        mov r8, qword [rsp]
+        mov qword [r12+(r8*8)], rax                 ; add new child
+        mov rcx, rax                                ; rcx = child ptr
+        insert_no_make:
+        add rsp, 16
+        mov rbx, rcx                                ; rcx = next child ptr, rbx = current node
+        inc r13
+        cmp r13, r15
+        jne insert_loop
+    mov dword [rbx+value], 1
     pop r15
     pop r14
     pop r13
